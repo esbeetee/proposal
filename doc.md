@@ -51,7 +51,7 @@ Is there a way to publish both of these at the same time, so that plugin authors
 
 There are 2 questions to bear in mind:
 - How do you consume these artifacts in a consistent fashion? So that developers can simply use `addSbtPlugin(...)` whether using the consistent format or not
-- How do you handle plugin dependencies? eg `sbt-web-scalajs-bundler` has a dependency on another plugin jar which is actually an invalid dependency.
+- How do you handle plugin dependencies? eg `sbt-web-scalajs-bundler` has a dependency on another plugin jar which is actually an invalid dependency, only valid from SBT's perspective through `additional` attributes (a hack from a Maven point of view).
 
 Following solutions could be applied here:
 1. We could automate a publishing matrix to publish in both consistent and inconsistent formats, for library authors.
@@ -60,3 +60,34 @@ Following solutions could be applied here:
    This would enable a quick diagnosis of what is missing in terms of plugins.
 
 These options could all be combined together, so that plugins could be accessible in a consistent way for people in all sorts of environments, while keeping in mind the future compatibility very eagerly.
+
+## Another potentially interesting solution
+
+Given that you can publish inconsistent POMs, is it possible to attach multiple POMs to an artifact? Ie so that you have the following:
+
+```
+https://repo1.maven.org/maven2/com/eed3si9n/sbt-assembly_2.12_1.0/1.2.0/sbt-assembly-1.2.0.pom
+https://repo1.maven.org/maven2/com/eed3si9n/sbt-assembly_2.12_1.0/1.2.0/sbt-assembly_2.12_1.0-1.2.0.pom
+```
+
+This way, you could have a single publish task that publishes both a standard version and a non-standard version. In this way, the effort required on the library authors could be much less, to the degree of possibly just adding an SBT plugin or upgrading to a newer SBT version, if this plugin is made into a default one.
+
+This needs to be validated, but I suspect it will actually work. Effectively, it would work for older SBT users, but if you are a newer SBT user, you could specify an option `downloadConsistent := true`, and SBT would only look for those that are consistent, thus working in a corporate proxied environment with only 1 main change. It might be possible as well to have fallbacks in resolution but this needs to be validated.
+
+This is the first experiment worth trying. If it works, then getting plug-in authors to publish in this approach would solve the problem rather quickly.
+
+Eugene's proposal is good but we should try to unify the syntax of adding SBT plugins, so that users do not get confused over this whole consistency thing by seeing various suffixes in artifacts.
+
+## Republishing plugins
+
+I did an experiment, and it worked to republish plugins into Maven Central. We could build on this and expand into the idea described prior: we can try to republish quite a few plug-ins, without modifying original JARs; just repackaging with new POMs. This would require a change into a `libraryDependencies += ` syntax, although it might be possible to specify a new `addSbtPlugin()` implementation as well, specific to Maven-consistent plugins. Republishing is also frustrating because we would need to repackage and keep up with developments in each of the SBT plugins, eg IntelliJ SBT plugins.
+
+This is a good tactical fix, but it is definitely not scalable.
+
+# Preferred approach
+
+We should head to publishing both styles as soon as possible, in order to retain backwards and forwards compatibility. Perhaps after 1 year, all users would be migrated to the new style, and a switch could be made to use the defaults.
+
+## Can we wait until SBT 2.0?
+
+No. There are only disadvantages to waiting. Time lost is time lost to other languages that have a better developer tooling UX, even if they are not actually better as languages.
